@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Akademi Sihir: Raja Bayangan</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Lato', sans-serif;
+            background-color: #0f172a; /* Slate 900 */
+            color: #e2e8f0; /* Slate 200 */
+            background-image: 
+                radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), 
+                radial-gradient(at 50% 0%, hsla(225,39%,30%,0.2) 0, transparent 50%), 
+                radial-gradient(at 100% 0%, hsla(339,49%,30%,0.2) 0, transparent 50%);
+            background-attachment: fixed;
+        }
+        h1, h2, h3, .title-font {
+            font-family: 'Cinzel', serif;
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.8s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .btn-choice {
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-choice::before {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%;
+            width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .btn-choice:hover::before {
+            left: 100%;
+        }
+
+        #game-container {
+            backdrop-filter: blur(10px);
+            background-color: rgba(30, 41, 59, 0.8); /* Slate 800 with opacity */
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+        
+        /* Character specific text colors */
+        .text-leo { color: #94a3b8; } /* Slate 400 */
+        .text-kaguya { color: #fde047; } /* Yellow 300 */
+        .text-viola { color: #c084fc; } /* Purple 400 */
+        .text-ashura { color: #ef4444; } /* Red 500 */
+        .text-althing { color: #60a5fa; } /* Blue 400 */
+        .text-narrator { color: #e2e8f0; font-style: italic; }
+
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4 sm:p-8">
+
+    <div id="game-container" class="max-w-3xl w-full rounded-2xl border border-slate-700 overflow-hidden flex flex-col h-[80vh] sm:h-[85vh]">
+        
+        <!-- Header -->
+        <div class="bg-slate-900 border-b border-slate-700 p-4 sm:p-6 text-center shadow-md z-10 relative">
+            <h1 class="text-2xl sm:text-4xl font-bold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-slate-300 via-purple-300 to-slate-500">
+                King of Shadow
+            </h1>
+            <p class="text-xs sm:text-sm text-slate-400 mt-2 uppercase tracking-widest font-bold">Arc: Akademi Sihir</p>
+            
+            <!-- Character Status Bar (Hidden initially) -->
+            <div id="status-bar" class="hidden mt-4 flex justify-center space-x-6 text-sm text-slate-300">
+                <div class="flex items-center">
+                    <span class="mr-2">Identitas:</span>
+                    <span class="text-leo font-bold">Leo (Murid Pindahan)</span>
+                </div>
+                <div class="flex items-center">
+                    <span class="mr-2">Afinitas Viola:</span>
+                    <span id="viola-affinity" class="text-viola font-bold">Netral</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Story Display Area -->
+        <div id="story-area" class="flex-grow p-6 sm:p-8 overflow-y-auto space-y-6 text-lg leading-relaxed relative">
+            <!-- Content will be injected here by JS -->
+        </div>
+
+        <!-- Choices Area -->
+        <div id="choices-area" class="bg-slate-800/80 p-4 border-t border-slate-700 flex flex-col space-y-3 shrink-0">
+            <!-- Buttons will be injected here by JS -->
+        </div>
+    </div>
+
+    <script>
+        // Game State
+        const state = {
+            violaAffinity: 0,
+            hasMetColossus: false,
+            magicRevealedLevel: 0, // 0: None, 1: Hint, 2: Partial, 3: Full
+            currentScene: 'start'
+        };
+
+        // DOM Elements
+        const storyArea = document.getElementById('story-area');
+        const choicesArea = document.getElementById('choices-area');
+        const statusBar = document.getElementById('status-bar');
+        const violaAffinityDisplay = document.getElementById('viola-affinity');
+
+        // Helper to scroll to bottom of story
+        function scrollToBottom() {
+            storyArea.scrollTop = storyArea.scrollHeight;
+        }
+
+        // Helper to update UI based on state
+        function updateUI() {
+            if (state.currentScene !== 'start' && state.currentScene !== 'intro_colossus') {
+                statusBar.classList.remove('hidden');
+                
+                let affinityText = "Netral";
+                let affinityColor = "text-viola";
+                if (state.violaAffinity > 2) { affinityText = "Tertarik"; affinityColor = "text-pink-400"; }
+                else if (state.violaAffinity < 0) { affinityText = "Kesal"; affinityColor = "text-red-400"; }
+                
+                violaAffinityDisplay.textContent = affinityText;
+                violaAffinityDisplay.className = `${affinityColor} font-bold`;
+            }
+        }
+
+        // --- STORY DATA ---
+        const storyScenes = {
+            start: {
+                text: [
+                    `<span class="text-narrator">Dunia ini dilindungi oleh entitas absolut yang dikenal sebagai 3 Colossus.</span>`,
+                    `<span class="text-narrator">Al Thing sang Dewa Kebijaksanaan, Ashura sang Dewa Perang, dan Kaguya sang Dewa Bulan. Kekuatan magis mereka menyamai dewa, dan seluruh dunia memuja mereka.</span>`,
+                    `<span class="text-narrator">Namun, di balik bayang-bayang mereka, ada satu eksistensi lain. Kekuatannya setara dengan para dewa, namun namanya tak dikenal sejarah.</span>`,
+                    `<span class="text-narrator">Kau adalah Leo, The King of Shadow.</span>`
+                ],
+                choices: [
+                    { text: "Mulai Kisah", nextScene: 'intro_kaguya' }
+                ]
+            },
+            
+            intro_kaguya: {
+                text: [
+                    `<span class="text-narrator">Ruangan itu dipenuhi cahaya perak. Kaguya, Dewa Bulan, menatapmu dengan senyum tipis yang elegan.</span>`,
+                    `<span class="text-kaguya">"Leo... sudah waktunya bagimu untuk keluar dari bayang-bayang, walau hanya sedikit. Kami telah mendaftarkanmu di Akademi Sihir Zenith."</span>`,
+                    `<span class="text-leo">"..."</span>`,
+                    `<span class="text-narrator">Kau tetap diam, tatapanmu dingin tak terbaca.</span>`,
+                    `<span class="text-althing">"Jangan menatapnya seperti itu, Kaguya,"</span> <span class="text-narrator">suara Al Thing bergema tenang.</span> <span class="text-althing">"Dia memiliki alasannya sendiri untuk tetap tersembunyi. Akademi akan menjadi tempat pengamatan yang baik baginya."</span>`,
+                    `<span class="text-ashura">"Bah!"</span> <span class="text-narrator">Ashura mendengus.</span> <span class="text-ashura">"Bocah bayangan ini hanya terlalu malas untuk bertarung secara terbuka. Kalau ada yang macam-macam di sana, ratakan saja akademi itu, Leo!"</span>`
+                ],
+                choices: [
+                    { text: "Mengangguk pelan pada Kaguya.", nextScene: 'arrive_academy' },
+                    { text: "\"Aku hanya akan mengamati.\"", nextScene: 'arrive_academy' },
+                    { text: "Tetap diam dan pergi.", nextScene: 'arrive_academy' }
+                ]
+            },
+
+            arrive_academy: {
+                text: [
+                    `<span class="text-narrator">Akademi Sihir Zenith. Institusi prestisius tempat para calon penyihir hebat ditempa.</span>`,
+                    `<span class="text-narrator">Kau masuk ke kelas 1-A sebagai murid pindahan. Instruktur memperkenalkannya.</span>`,
+                    `<span class="text-narrator">"Ini Leo. Dia agak pendiam, jadi tolong bantu dia beradaptasi."</span>`,
+                    `<span class="text-narrator">Kau berjalan menuju satu-satunya kursi kosong di belakang. Di sebelahmu, duduk seorang gadis dengan telinga runcing. Kulitnya gelap eksotis, rambut peraknya diikat rapi. Seorang Dark Elf.</span>`,
+                    `<span class="text-narrator">Mata merahnya menatapmu sekilas dengan tajam sebelum dia membuang muka, mendengus pelan.</span>`,
+                    `<span class="text-viola">"Hmph. Jangan pikir karena kau duduk di sebelahku, aku akan membantumu. Murid biasa sepertimu hanya akan jadi beban."</span>`
+                ],
+                choices: [
+                    { 
+                        text: "Menatapnya datar tanpa berkata apa-apa.", 
+                        action: () => state.violaAffinity += 1,
+                        nextScene: 'viola_interaction_1_silent' 
+                    },
+                    { 
+                        text: "\"Aku tidak meminta bantuanmu.\"", 
+                        action: () => state.violaAffinity += 0,
+                        nextScene: 'viola_interaction_1_cold' 
+                    },
+                    { 
+                        text: "Menghela napas dan langsung duduk (Abaikan).", 
+                        action: () => state.violaAffinity -= 1,
+                        nextScene: 'viola_interaction_1_ignore' 
+                    }
+                ]
+            },
+
+            viola_interaction_1_silent: {
+                text: [
+                    `<span class="text-narrator">Kau hanya menatapnya dengan pandangan kosong, dingin, seolah kata-katanya tidak memiliki bobot sama sekali.</span>`,
+                    `<span class="text-narrator">Viola terlihat sedikit salah tingkah ditatap seperti itu. Rona merah tipis muncul di pipinya yang gelap.</span>`,
+                    `<span class="text-viola">"A-apa lihat-lihat?! Matamu itu menyebalkan tahu! B-bukan berarti aku peduli kau duduk di sini!"</span>`,
+                    `<span class="text-narrator">Dia memalingkan wajahnya dengan cepat ke arah papan tulis, berpura-pura fokus. Kau menyadari, ada sesuatu yang menarik dari Dark Elf ini.</span>`
+                ],
+                choices: [
+                    { text: "Lanjutkan ke pelajaran sihir.", nextScene: 'magic_class_start' }
+                ]
+            },
+
+            viola_interaction_1_cold: {
+                text: [
+                    `<span class="text-leo">"Aku tidak meminta bantuanmu."</span>`,
+                    `<span class="text-narrator">Suaramu pelan, namun nadanya sedingin es. Viola sedikit tersentak mendengarnya.</span>`,
+                    `<span class="text-viola">"B-baguslah kalau begitu! Cih, murid baru saja sudah sombong. Jangan menangis padaku kalau kau tidak bisa mengikuti pelajaran!"</span>`,
+                    `<span class="text-narrator">Dia bersedekap, mencoba terlihat angkuh, namun kau bisa melihat telinganya yang runcing sedikit bergerak-gerak gelisah. Menarik.</span>`
+                ],
+                choices: [
+                    { text: "Lanjutkan ke pelajaran sihir.", nextScene: 'magic_class_start' }
+                ]
+            },
+
+            viola_interaction_1_ignore: {
+                text: [
+                    `<span class="text-narrator">Kau sama sekali tidak menanggapi omelannya. Kau menarik kursi dan duduk, pandanganmu lurus ke depan, menganggapnya tidak ada.</span>`,
+                    `<span class="text-viola">"Hei! Kau mendengarku tidak?! Jangan mengabaikanku!"</span>`,
+                    `<span class="text-narrator">Viola menggebrak meja dengan kesal. Dia benci diabaikan.</span>`,
+                    `<span class="text-viola">"Lihat saja nanti, akan kutunjukkan perbedaan sihir elit dengan sihir kampunganmu!"</span>`
+                ],
+                choices: [
+                    { text: "Lanjutkan ke pelajaran sihir.", nextScene: 'magic_class_start' }
+                ]
+            },
+
+            magic_class_start: {
+                text: [
+                    `<span class="text-narrator">Pelajaran pertama adalah Praktik Manipulasi Mana Dasar. Instruktur meminta setiap murid untuk membentuk bola mana di tangan mereka.</span>`,
+                    `<span class="text-narrator">Murid-murid lain bersusah payah. Beberapa berhasil membuat bola cahaya kecil sebesar kelereng.</span>`,
+                    `<span class="text-narrator">Viola, dengan senyum bangga, mengangkat tangannya. Sebuah bola mana berwarna ungu pekat seukuran bola tenis berpendar terang.</span>`,
+                    `<span class="text-narrator">Instruktur memuji bakatnya. Viola melirik ke arahmu dengan tatapan menantang.</span>`,
+                    `<span class="text-viola">"Nah, giliranmu, murid baru. Jangan bilang kau bahkan tidak bisa mengumpulkan mana."</span>`
+                ],
+                choices: [
+                    { 
+                        text: "Buat bola mana hitam yang sangat kecil (Sembunyikan kekuatan).", 
+                        action: () => { state.magicRevealedLevel = 0; state.violaAffinity -= 1; },
+                        nextScene: 'magic_class_weak' 
+                    },
+                    { 
+                        text: "Buat bola mana hitam seukuran milik Viola (Sesuaikan).", 
+                        action: () => { state.magicRevealedLevel = 1; state.violaAffinity += 2; },
+                        nextScene: 'magic_class_match' 
+                    },
+                    { 
+                        text: "Gunakan sedikit energi bayangan asli tanpa bentuk (Intimidasi).", 
+                        action: () => { state.magicRevealedLevel = 2; state.violaAffinity += 1; },
+                        nextScene: 'magic_class_shadow' 
+                    }
+                ]
+            },
+
+            magic_class_weak: {
+                text: [
+                    `<span class="text-narrator">Kau mengendalikan energi bayanganmu yang tak terbatas, mengompresnya hingga hanya sebesar ujung jari. Warnanya hitam kelam, nyaris tak terlihat.</span>`,
+                    `<span class="text-viola">"Pfft— Hahaha! Apa itu? Nyamuk mana?"</span> <span class="text-narrator">Viola tertawa mengejek, meski tawanya terdengar sedikit dipaksakan.</span>`,
+                    `<span class="text-viola">"Sudah kuduga, kau tidak ada apa-apanya. Y-yah, jangan terlalu sedih, tidak semua orang terlahir jenius sepertiku."</span>`,
+                    `<span class="text-narrator">Kau tetap diam. Misimu menyamar sebagai murid biasa berjalan lancar, meski sedikit menjengkelkan.</span>`
+                ],
+                choices: [
+                    { text: "Istirahat siang.", nextScene: 'lunch_break' }
+                ]
+            },
+
+            magic_class_match: {
+                text: [
+                    `<span class="text-narrator">Kau memproyeksikan mana murni. Alih-alih cahaya, ia bermanifestasi sebagai bola kegelapan absolut seukuran bola tenis, meniru persis ukuran bola mana Viola.</span>`,
+                    `<span class="text-narrator">Ruangan menjadi sedikit dingin. Instruktur terbelalak melihat afinitas kegelapan murni.</span>`,
+                    `<span class="text-narrator">Viola membeku. Senyum sombongnya luntur, digantikan keterkejutan yang nyata.</span>`,
+                    `<span class="text-viola">"A-apa... Atribut kegelapan? Dan sepadat itu...?"</span>`,
+                    `<span class="text-narrator">Dia menatapmu intens, matanya mencari-cari kebohongan di wajahmu, namun kau tetap berekspresi datar.</span>`,
+                    `<span class="text-viola">"J-jangan besar kepala! Ukuran bukan segalanya dalam sihir! L-lagipula, milikku jauh lebih indah!"</span> <span class="text-narrator">ucapnya gagap, memalingkan wajah yang memerah.</span>`
+                ],
+                choices: [
+                    { text: "Istirahat siang.", nextScene: 'lunch_break' }
+                ]
+            },
+
+            magic_class_shadow: {
+                text: [
+                    `<span class="text-narrator">Kau memutuskan untuk tidak membentuk bola. Kau membiarkan sebagian kecil—sepersekian persen—dari aura <span class="text-slate-500 font-bold">King of Shadow</span> merembes keluar.</span>`,
+                    `<span class="text-narrator">Tiba-tiba, cahaya di dalam ruangan meredup. Bayangan dari meja, kursi, dan para murid tampak memanjang ke arahmu, seolah bersujud.</span>`,
+                    `<span class="text-narrator">Sensasi mencekam memenuhi udara. Beberapa murid terjatuh karena tekanan tak terlihat. Instruktur memucat.</span>`,
+                    `<span class="text-narrator">Kau segera menariknya kembali sebelum ada yang terluka. Ruangan kembali normal.</span>`,
+                    `<span class="text-narrator">Viola menatapmu dengan mata terbelalak lebar, napasnya sedikit terengah. Bukan ketakutan, melainkan kekaguman yang tak bisa dia sembunyikan.</span>`,
+                    `<span class="text-viola">"T-tadi itu apa...? Kau... siapa kau sebenarnya?"</span> bisiknya, nadanya tak lagi angkuh.`,
+                    `<span class="text-leo">"Hanya trik bayangan murahan,"</span> jawabmu dingin.`
+                ],
+                choices: [
+                    { text: "Istirahat siang.", nextScene: 'lunch_break' }
+                ]
+            },
+
+            lunch_break: {
+                text: [
+                    `<span class="text-narrator">Waktu istirahat. Kau pergi ke atap sekolah yang sepi untuk menikmati kesunyian, sesuai janjimu pada Kaguya untuk tidak membuat masalah terlalu cepat.</span>`,
+                    `<span class="text-narrator">Tiba-tiba, pintu atap terbuka. Viola berdiri di sana, memegang dua kotak makan siang. Dia tampak ragu saat melihatmu.</span>`,
+                    `<span class="text-viola">"Cih. Kenapa kau ada di tempat rahasiaku?"</span> <span class="text-narrator">rutuknya, meski dia tidak berbalik pergi.</span>`,
+                    `<span class="text-viola">"K-karena kau sudah di sini... dan kebetulan aku buat bekal terlalu banyak... j-jangan pikir aku sengaja membawakannya untukmu ya! Ini cuma sisa!"</span>`,
+                    `<span class="text-narrator">Dia menyodorkan kotak makan berwarna hitam ke arahmu sambil membuang muka.</span>`
+                ],
+                choices: [
+                    { 
+                        text: "Terima tanpa bicara.", 
+                        action: () => state.violaAffinity += 2,
+                        nextScene: 'ending_silent_accept' 
+                    },
+                    { 
+                        text: "\"Aku tidak butuh sisa makananmu.\"", 
+                        action: () => state.violaAffinity -= 2,
+                        nextScene: 'ending_reject' 
+                    }
+                ]
+            },
+
+            ending_silent_accept: {
+                text: [
+                    `<span class="text-narrator">Kau mengambil kotak makan itu dalam diam. Kau membukanya. Isinya diatur dengan sangat rapi dan estetik, sama sekali tidak terlihat seperti 'sisa'.</span>`,
+                    `<span class="text-narrator">Kau memakan satu gigitan. Rasanya... sangat lezat. Kau menatapnya.</span>`,
+                    `<span class="text-leo">"Bisa dimakan."</span>`,
+                    `<span class="text-narrator">Viola terkesiap, wajahnya merah padam hingga ke telinganya yang runcing.</span>`,
+                    `<span class="text-viola">"T-TENTU SAJA BISA DIMAKAN BODOH! B-Baguslah kalau kau suka! Ingat, itu hutang budi!"</span>`,
+                    `<span class="text-narrator">Dia duduk agak jauh darimu, memakan bekalnya sendiri sambil sesekali mencuri pandang ke arahmu.</span>`,
+                    `<span class="text-narrator">Di dimensi saku yang jauh, Kaguya, Al Thing, dan Ashura memperhatikan lewat cermin air.</span>`,
+                    `<span class="text-ashura">"Bocah itu... malah main-main dengan gadis Elf,"</span> <span class="text-narrator">dengus Ashura.</span>`,
+                    `<span class="text-kaguya">"Biarkan saja,"</span> <span class="text-narrator">Kaguya tersenyum lembut.</span> <span class="text-kaguya">"Sang Raja Bayangan mungkin mulai menemukan cahaya kecilnya di sana."</span>`
+                ],
+                choices: [
+                    { text: "Lanjutkan (3 Bulan Kemudian)", nextScene: 'three_months_later' }
+                ] 
+            },
+
+            ending_reject: {
+                text: [
+                    `<span class="text-leo">"Aku tidak butuh sisa makananmu."</span>`,
+                    `<span class="text-narrator">Kau menolaknya dengan suara dingin, tatapanmu tak beralih dari langit.</span>`,
+                    `<span class="text-narrator">Tangan Viola yang menyodorkan kotak makan itu bergetar. Kekecewaan melintas di matanya sebelum tertutup oleh rasa gengsi.</span>`,
+                    `<span class="text-viola">"B-begitu ya! Cih, padahal aku sudah berbaik hati pada murid rendahan! B-buang saja ke tempat sampah sana!"</span>`,
+                    `<span class="text-narrator">Dia berbalik kasar dan berlari turun, membanting pintu atap.</span>`,
+                    `<span class="text-narrator">Kau kembali sendirian dalam diam. Misimu menyamar mungkin aman, tapi kau baru saja membuat permusuhan dengan gadis yang menarik.</span>`,
+                    `<span class="text-narrator">Dari kejauhan, para Colossus hanya bisa menggelengkan kepala melihat sikap dingin The King of Shadow.</span>`
+                ],
+                choices: [
+                    { text: "Lanjutkan (3 Bulan Kemudian)", nextScene: 'three_months_later' }
+                ] 
+            },
+
+            three_months_later: {
+                text: [
+                    `<span class="text-narrator">Tiga bulan telah berlalu sejak kau masuk ke Akademi Sihir Zenith. Kelas 1-A yang berisi 28 murid kini bersiap menghadapi ujian triwulan.</span>`,
+                    `<span class="text-narrator">Ujian tulis telah diselesaikan oleh semua orang tanpa banyak kendala. Kini, tiba saatnya ujian praktek.</span>`,
+                    `<span class="text-narrator">Instruktur mengumumkan bahwa murid-murid harus membentuk kelompok. Namun, sebelum instruksi selesai, pintu aula praktek terbuka.</span>`,
+                    `<span class="text-narrator">Cahaya perak yang familiar menyelimuti ruangan. Kaguya, sang Dewa Bulan dari 3 Colossus, melangkah masuk dengan keanggunan mutlak.</span>`,
+                    `<span class="text-narrator">Seluruh murid terdiam, lalu meledak dalam sorakan luar biasa. Mereka tidak menyangka entitas pelindung dunia akan turun langsung untuk mengajar ujian praktek kelas mereka!</span>`
+                ],
+                choices: [
+                    { text: "Lihat reaksi Viola", nextScene: 'kaguya_exam' }
+                ]
+            },
+
+            kaguya_exam: {
+                text: [
+                    `<span class="text-narrator">Kau melirik ke arah Viola. Telinga elf-nya berdiri tegak, matanya berbinar-binar penuh pemujaan, dan tangannya bergetar. Dia adalah penggemar berat Kaguya sejak kecil.</span>`,
+                    `<span class="text-kaguya">"Senang bertemu kalian, calon penyihir masa depan,"</span> <span class="text-narrator">ucap Kaguya lembut, meski kau tahu tatapannya sekilas tertuju padamu sambil tersenyum tipis.</span> <span class="text-kaguya">"Hari ini, aku akan menguji dasar Telekinesis kalian."</span>`,
+                    `<span class="text-narrator">Ujian dimulai. Para murid kesulitan menggerakkan bongkahan batu besar. Namun Viola, yang diam-diam selalu melatih sihirnya karena terinspirasi Kaguya, adalah yang paling cepat menguasainya. Batu besarnya melayang sempurna.</span>`,
+                    `<span class="text-viola">"Hmph! Lihat itu, Leo?"</span> <span class="text-narrator">Viola segera berpaling padamu begitu batu itu turun, senyum merendahkannya kembali terpasang.</span>`,
+                    `<span class="text-viola">"Bahkan dalam sejuta tahun kau tidak akan bisa mengangkat batu sebesar milikku! Makanya, belajarlah dari yang terbaik, dasar lamban!"</span>`
+                ],
+                choices: [
+                    { text: "Cuek dan berjalan menjauh.", nextScene: 'viola_chase', action: () => state.violaAffinity += 1 }
+                ]
+            },
+
+            viola_chase: {
+                text: [
+                    `<span class="text-narrator">Kau sama sekali tidak memedulikan ejekannya. Menganggapnya seperti angin lalu, kau memutar tubuh dan berjalan menjauh, meninggalkan area ujian.</span>`,
+                    `<span class="text-viola">"H-hei! Mau ke mana kau?! Aku belum selesai bicara!"</span>`,
+                    `<span class="text-narrator">Viola segera mengejarmu. Dia berlari kecil, terus mengomel dan mengejek kemampuanmu di sepanjang koridor.</span>`,
+                    `<span class="text-narrator">Sejujurnya... kau menyadari bahwa ada ketertarikan aneh dalam dirimu terhadap gadis cerewet ini, meski sikapnya yang terus mengejek penyamaran 'siswa biasa'-mu sedikit menjengkelkan.</span>`,
+                    `<span class="text-narrator">Di sisi lain, yang tidak kau ketahui adalah: Viola diam-diam selalu terpesona melihat wajahmu yang tampan dan tenang itu. Dia sedikit tertarik padamu, namun gengsi dan sifat tsundere-nya memaksa dia untuk menggunakan ejekan agar bisa terus berbicara denganmu.</span>`
+                ],
+                choices: [
+                    { text: "Lanjutkan ke Ujian Lapangan Hutan Ilusi", nextScene: 'survival_task' }
+                ]
+            },
+
+            survival_task: {
+                text: [
+                    `<span class="text-narrator">Beberapa waktu kemudian, akademi mengadakan ujian lapangan: Tugas Bertahan Hidup dan Strategi Tempur di Hutan Ilusi. Kelompok dibagi, di mana Viola bertugas berburu, kau bertugas mencari kayu bakar, dan tiga anggota lainnya mencari tanaman herbal.</span>`,
+                    `<span class="text-narrator">Saat berburu, Viola terlalu gegabah melawan monster tingkat C dan terluka. Mendengar teriakannya, kelompok datang, namun kau diem-diem memerintahkan pasukan bayangan tingkat B untuk menghabisi monster itu demi melindunginya.</span>`,
+                    `<span class="text-narrator">Keempat rekan kelompokmu kaget bukan kepalang, namun monster bayangan itu justru melindungi mereka sebelum menghilang ditelan kegelapan.</span>`,
+                    `<span class="text-narrator">Kau muncul, lalu memaksa menggendong Viola yang keras kepala mengatakan itu hanya goresan. Sesampainya di tenda, healer merawat lukanya sementara Viola memukul dadamu karena malu. Singkat cerita, kelompok kalian mendapat peringkat ke-2.</span>`,
+                    `<span class="text-narrator">Di perjalanan pulang, Viola mengejekmu namun kemudian berterima kasih. Melihat keimutannya, kau mengelus kepalanya; Viola sempat terkejut, namun menerimanya karena merasa nyaman, sebelum akhirnya memukul tanganmu pelan dan berlari pulang dengan wajah merah padam.</span>`
+                ],
+                choices: [
+                    { text: "Keesokan Paginya (Insiden Gadis Lain)", nextScene: 'morning_jealousy' }
+                ]
+            },
+
+            morning_jealousy: {
+                text: [
+                    `<span class="text-narrator">Keesokan paginya, saat berjalan memasuki gerbang akademi, Viola melihatmu dari kejauhan. Dia berniat melangkah maju untuk menyapamu seperti biasa.</span>`,
+                    `<span class="text-narrator">Namun tiba-tiba, seorang siswi cantik dari kelas sebelah berlari menghampirimu terlebih dahulu, menyapa dengan riang dan menggoda wajah tampanmu.</span>`,
+                    `<span class="text-narrator">Sebagai pemuda berwajah memukau, Leo memang punya banyak pengagum rahasia yang sama sekali tidak peduli seberapa rendah tingkat sihirmu di atas kertas.</span>`,
+                    `<span class="text-narrator">Viola menghentikan langkahnya. Tatapannya tajam, api cemburu membakar dadanya. Dia ingin segera menghampiri kalian, namun gengsinya menahan—takut kau akan menyadari perasaan tersembunyinya.</span>`,
+                    `<span class="text-narrator">Sayangnya, kau yang polos sama sekali tidak peka dan menganggap sapaan itu angin lalu.</span>`
+                ],
+                choices: [
+                    { text: "Masuk ke Kelas & Reaksi Viola", nextScene: 'class_avoidance' }
+                ]
+            },
+
+            class_avoidance: {
+                text: [
+                    `<span class="text-narrator">Sesampainya di kelas, kau duduk di kursi sebelahmu seperti biasa. Namun, begitu melihatmu, Viola mendengus kesal dan dengan sengaja memindahkan tasnya, pindah duduk ke bangku lain yang jauh.</span>`,
+                    `<span class="text-narrator">Kau terdiam bingung. Sepanjang pelajaran, Viola terus menghindar dan membuang muka setiap kali kau menoleh ke arahnya.</span>`,
+                    `<span class="text-narrator">Merasa ada yang tidak beres dengan 'miliknya', seusai kelas selesai, kau langsung menghampirinya dan mencengkeram pergelangan tangannya pelan agar dia tidak bisa kabur.</span>`,
+                    `<span class="text-leo">"Kenapa kau menghindariku?"</span> tanya-mu datar sambil mendekatkan wajahmu padanya, mengunci ruang geraknya.`,
+                    `<span class="text-viola">"A-apaan sih?! Lepaskan! Aku... aku hanya lelah dan tidak ingin mengganggu waktu berhargamu dengan gadis lain tadi pagi!"</span> <span class="text-narrator">ucap Viola keceplosan, wajahnya memerah padam menahan kesal sekaligus malu.</span>`
+                ],
+                choices: [
+                    { text: "Panik dan Memeriksa Keadaannya", nextScene: 'leo_panic_check' }
+                ]
+            },
+
+            leo_panic_check: {
+                text: [
+                    `<span class="text-narrator">Sontak, bagian dalam dirimu sebagai Raja Bayangan merasa panik luar biasa. Viola menolakmu? Dia bilang lelah? Apakah dia sakit parah akibat sisa luka di hutan kemarin?!</span>`,
+                    `<span class="text-narrator">Biasanya gadis itu selalu datang mencarimu untuk mengejek, tapi hari ini dia justru menghindar dan tampak lemah di matamu.</span>`,
+                    `<span class="text-leo">"Kenapa wajahmu sepucat itu saat panik begitu...?"</span> <span class="text-narrator">tanya Viola heran melihat ekspresi serius di wajahmu.</span>`,
+                    `<span class="text-narrator">Tanpa ragu, kedua tanganmu terulur memegang kedua pipi gelap eksotisnya dengan lembut, menatap lekat ke dalam mata merahnya.</span>`,
+                    `<span class="text-leo">"Apakah kau sehat? Ada yang sakit di tubuhmu?"</span> suaramu terdengar begitu cemas.`,
+                    `<span class="text-viola">"T-tentu saja aku sehat, bodoh!"</span> protes Viola, pipinya semakin panas membara karena sentuhan langsung tanganmu di wajahnya.`,
+                    `<span class="text-narrator">Dalam pikiran polosmu: <span class="text-leo">"Jika dia bilang sehat tapi perilakunya aneh begini... pasti dia sedang berbohong dan menutupi penyakitnya."</span> Tekadmu bulat untuk selalu berada di sisinya dan merawatnya sampai sembuh total!</span>`
+                ],
+                choices: [
+                    { text: "Menuju Kantin Siang Hari", nextScene: 'cafeteria_scene' }
+                ]
+            },
+
+            cafeteria_scene: {
+                text: [
+                    `<span class="text-narrator">Siang harinya, kau berniat membelikan makanan bergizi untuk 'menyembuhkan' Viola. Namun setibanya di kantin, kau melihat Viola sedang asyik berbincang hangat dengan seorang murid lelaki dari kelompok lain.</span>`,
+                    `<span class="text-narrator">Meskipun di sekitar mereka ada beberapa orang lain, fokus mata dinginmu hanya tertuju pada satu titik: murid lelaki yang berdiri terlalu dekat dengan wanita milikmu.</span>`,
+                    `<span class="text-narrator">Rasa posesif sang Raja Bayangan bergolak. Kau langsung melangkah cepat menghampiri mereka dan mengajak Viola pergi untuk makan bersama.</span>`,
+                    `<span class="text-viola">"Uhm, maaf... tapi aku sudah berjanji pada teman-temanku untuk makan siang bersama di sini, Leo,"</span> <span class="text-narrator">tolak Viola karena telanjur janjian.</span>`,
+                    `<span class="text-narrator">Mendengar penolakan itu, aura dingin khasmu menguar. Kau menatapnya lekat-lekat, sama sekali tidak terima dia menolakmu demi lelaki lain.</span>`
+                ],
+                choices: [
+                    { text: "Viola Mencemaskanmu", nextScene: 'viola_anxiety' }
+                ]
+            },
+
+            viola_anxiety: {
+                text: [
+                    `<span class="text-narrator">Karena kau pergi begitu saja dengan raut wajah dingin setelah penolakan itu, sisa jam istirahat sekolah terasa sangat panjang bagi Viola.</span>`,
+                    `<span class="text-narrator">Sepanjang waktu, mata merahnya terus melirik ke sekeliling kantin dan koridor, mencari sosok tinggi berambut gelap yang biasanya selalu ada di sekitar jalurnya.</span>`,
+                    `<span class="text-narrator">Namun, batang hidungmu sama sekali tidak terlihat. Rasa cemas mendadak merayap di dada gadis Dark Elf itu.</span>`,
+                    `<span class="text-viola">*(Apakah dia marah besar padaku...? Apa karena aku menolaknya tadi, dia memutuskan untuk pergi menjauh dan tidak mau menemuiku lagi...?)*</span> <span class="text-narrator">batin Viola gelisah, hatinya terasa kosong dan ketakutan melanda karena menyadari betapa dia telah terbiasa dengan kehadiran sang Raja Bayangan di sisinya.</span>`,
+                    `<br><br><span class="text-center w-full block text-2xl font-bold text-yellow-500 title-font">To Be Continued...</span>`
+                   
+                              ],
+                choices: [
+                    { text: "Pencarian & Kejutan di Ruang Pelatihan", nextScene: 'training_room_find' }
+                ]
+            },
+
+            training_room_find: {
+                text: [
+                    `<span class="text-narrator">Setelah pelajaran selesai, Viola langsung mengabaikan semua ajakan teman-temannya. Tekadnya bulat: dia harus menemukanmu dan meminta maaf!</span>`,
+                    `<span class="text-narrator">Dia berlari menyusuri setiap sudut akademi. Hingga akhirnya, dia tiba di satu tempat terpencil yang belum pernah dia masuki: <span class="text-slate-300 font-bold">Ruang Pelatihan Tertutup</span>.</span>`,
+                    `<span class="text-narrator">Pintu besar itu terbuka sedikit. Saat Viola mengintip ke dalam, matanya terbelalak kaget. Kau sedang terbaring tenang di atas lantai batu yang dingin.</span>`,
+                    `<span class="text-viola">*(Dia... dia pingsan?! Apakah karena kelelahan mencariku atau karena kelaparan setelah insiden tadi pagi? Oh tidak!)*</span> <span class="text-narrator">pikir Viola panik luar biasa.</span>`,
+                    `<span class="text-narrator">Dengan buru-buru dia menghampirimu, mengguncang-guncang tubuhmu dengan cemas.</span> <span class="text-viola">"Hei, bangun! Jangan menakutiku! Kumohon bangunlah, Leo!"</span>`
+                ],
+                choices: [
+                    { text: "Leo Terbangun & Miskomunikasi", nextScene: 'training_room_wakeup' }
+                ]
+            },
+
+            training_room_wakeup: {
+                text: [
+                    `<span class="text-narrator">Kau mengerjap pelan, terbangun dari tidur nyenyakmu akibat kelelahan berpikir seharian. Kau menatap Viola yang wajahnya sudah pucat pasi karena panik.</span>`,
+                    `<span class="text-leo">"Hm? Kenapa kamu ada di sini...?"</span> tanyamu dengan suara serak khas orang baru bangun tidur.`,
+                    `<span class="text-viola">"KEMANA SAJA KAMU, BODOH?!"</span> <span class="text-narrator">teriak Viola histeris, air mata nyaris menggenang di sudut mata merahnya.</span> <span class="text-viola">"Aku mencarimu ke mana-mana! Kenapa kamu terbaring di sini?! Aku pikir kamu pingsan atau sengaja pergi menjauh dariku!"</span>`,
+                    `<span class="text-narrator">Kau terdiam sejenak, lalu meminta maaf dengan polosnya, <span class="text-leo">"Maaf... aku tadi kelelahan dan tidak sengaja tertidur di sini."</span></span>`,
+                    `<span class="text-viola">"Tidur?! Di tempat dingin seperti ini?!"</span> <span class="text-narrator">Viola menghela napas panjang, rasa leganya membuncah luar biasa menyadari tidak terjadi hal buruk padamu.</span> <span class="text-viola">"Kalau mau tidur, kenapa tidak di kelas saja?! Kan ada aku... aku pasti akan menemanimu..."</span> ucapnya pelan di akhir kalimat dengan wajah merona merah.`
+                ],
+                choices: [
+                    { text: "Pelukan Platonis & Tawa Lega", nextScene: 'training_room_hug' }
+                ]
+            },
+
+            training_room_hug: {
+                text: [
+                    `<span class="text-narrator">Dalam pikiran polosmu, melihatnya tidak menghindari dan mengomelimu lagi berarti dia sudah 'sembuh dari penyakit anehnya'.</span>`,
+                    `<span class="text-narrator">Tanpa ragu, kau bangkit dan langsung merengkuh tubuhnya ke dalam pelukanmu, menyandarkan kepalanya di dadamu.</span>`,
+                    `<span class="text-leo">"Syukurlah... kamu sudah sembuh,"</span> gumammu tulus penuh kelegaan.`,
+                    `<span class="text-viola">"Hah?! Aku tidak sakit, bodoh! Apa dari tadi kepala mu terbentur batu hah, berpikir aku ini sakit?!"</span> protes Viola sambil meronta malu di dalam pelukanmu, meski tangannya tidak berusaha mendorongmu menjauh.`,
+                    `<span class="text-leo">"Tentu saja kamu sakit... buktinya tadi kamu menghindariku,"</span> jawabmu sangat polos.`,
+                    `<span class="text-narrator">Mendengar kepolosanmu yang luar biasa itu, pertahanan Viola runtuh. Dia tertawa kecil, merasa gemas bercampur kesal menghadapi jalan pikiranmu yang unik.</span>`,
+                    `<span class="text-narrator">Akhirnya, dengan hati yang berbunga-bunga, kau dan Viola berjalan berdampingan kembali ke kelas bersama-sama.</span>`
+                ],
+                choices: [
+                    { text: "Panggilan Mendadak Kepala Sekolah", nextScene: 'principal_summon' }
+                ]
+            },
+
+            principal_summon: {
+                text: [
+                    `<span class="text-narrator">Sepulang sekolah, Viola sudah berencana mengajakmu makan malam bersama untuk menebus kesalahannya tadi siang..</span>`,
+                    `<span class="text-narrator">Viola menghampiri meja leo dan mengajak nya untuk makan malam bersama dirumah nya: <span class="text-blue-400 font-bold">"Eh?"</span></span>`,
+                    `<span class="text-leo">Kau mengangguk pada viola <span class="text-viola">*(Aku akan berusaha membuat makanan yang enak )*</span> batinnya ceria.</span>`,
+                    `<span class="text-narrator">Leo dan viola berjalan bersama menuju rumah viola untuk makan bersama </span>`
+
+                                 ],
+                choices: [
+                    { text: "Lanjutkan ke Babak Rumah Viola", nextScene: 'viola_home_dinner' }
+                ] 
+            },
+
+            viola_home_dinner: {
+                text: [
+                    `<span class="text-narrator">Sesampainya di rumah Viola, gadis itu langsung pergi ke dapur untuk menyiapkan makanan. Dia berniat membuat Leo terkesan dengan masakannya.</span>`,
+                    `<span class="text-narrator">Leo menunggu dengan tenang di ruang tamu sambil menatap sekeliling ruangan. Sesaat kemudian makanan telah siap, dan Leo dipanggil ke ruang makan untuk makan bersama.</span>`,
+                    `<span class="text-leo">"Kelihatan enak,"</span> <span class="text-narrator">ucap Leo singkat. Dia mencoba suapannya dan berkata, <span class="text-leo">"Ini enak."</span></span>`,
+                    `<span class="text-narrator">Viola dengan wajah sombongnya berkata kepada Leo, <span class="text-viola">"Tentu saja, aku cukup hebat dalam memasak!"</span></span>`,
+                    `<span class="text-narrator">Lalu dia mulai berbicara menyebalkan tepat di samping Leo: <span class="text-viola">"Jika kau menuruti semua perkataanku, aku akan membuatkan makanan enak setiap hari untukmu!"</span></span>`
+                ],
+                choices: [
+                    { text: "Tarik Viola ke pangkuan agar dia diam.", nextScene: 'viola_lap_sit' }
+                ]
+            },
+
+            viola_lap_sit: {
+                text: [
+                    `<span class="text-narrator">Leo hanya ingin makan dengan tenang, tetapi Viola terus berbicara menyebalkan. Sontak, Leo menarik Viola ke pangkuannya agar dia diam.</span>`,
+                    `<span class="text-narrator">Tentu saja Viola terkejut bukan kepalang dan berseru, <span class="text-viola">"Apa yang kamu lakukan, bodoh?!"</span></span>`,
+                    `<span class="text-narrator">Lalu dia terdiam dengan wajah memerah padam. Di situlah Leo berpikir telah menemukan cara membuat orang diam dengan melakukan hal semacam itu.</span>`,
+                    `<span class="text-narrator">Setelah makan, rasa mengantuk menyerang Leo, dan dia tertidur di ruang tamu sementara Viola mencuci piring bekas makan.</span>`
+                ],
+                choices: [
+                    { text: "Lihat Viola yang mendapati Leo tertidur", nextScene: 'viola_prank_sleep' }
+                ]
+            },
+
+            viola_prank_sleep: {
+                text: [
+                    `<span class="text-narrator">Setelah selesai, Viola melihat Leo sedang tertidur lelap. Sontak Viola berpikir untuk menjahili Leo yang sedang tidur.</span>`,
+                    `<span class="text-narrator">Saat Viola berencana untuk mencoret wajah Leo, sebuah refleks terjadi: Leo mendadak menarik Viola ke dalam pelukannya saat tidur!</span>`,
+                    `<span class="text-narrator">Tentu saja Viola kaget, tetapi dia tidak bersuara keras karena tidak ingin Leo terbangun, mengingat Leo tertidur pulas bagaikan orang yang sangat kelelahan.</span>`,
+                    `<span class="text-narrator">Viola mencoba segala cara untuk melepaskan diri dari pelukan itu, namun karena lelah telah mencoba berbagai cara, dia pun ikut mengantuk dan tertidur di sebelah Leo dalam pelukannya.</span>`
+                ],
+                choices: [
+                    { text: "Pagi Hari & Tanda Kepemilikan", nextScene: 'morning_ownership' }
+                ]
+            },
+
+            morning_ownership: {
+                text: [
+                    `<span class="text-narrator">Keesokan paginya, Leo bangun duluan dan mendapati Viola tertidur di atas tubuhnya sambil memeluknya erat.</span>`,
+                    `<span class="text-narrator">Tak lama kemudian, Viola juga terbangun dan merasa sangat malu karena dia memeluk tubuh Leo saat tidur.</span>`,
+                    `<span class="text-narrator">Di situ dia langsung melepas pelukan dan ingin pergi, tetapi kamu menarik dan memeluk Viola lagi!</span>`,
+                    `<span class="text-narrator">Tentu saja Viola merasa malu luar biasa. Sontak Leo yang melihat itu tidak tahan dengan keimutan wanita elf ini, lalu membuat tanda kepemilikan (ciuman).</span>`,
+                    `<span class="text-narrator">Tentu saja Viola kaget karena tiba-tiba kau berbuat begitu, lalu dengan sikap marah dia berkata, <span class="text-viola">"Mengapa kau menciumku, bodoh?!"</span></span>`,
+                    `<span class="text-leo">"Sebagai tanda kepemilikan,"</span> <span class="text-narrator">jawab Leo datar.</span>`,
+                    `<span class="text-narrator">(Plot twist: Leo berpikir begitulah cara membuat tanda kepemilikan karena dulu sempat melihat orang lain melakukannya sebagai tanda kepemilikan pada kekasih.)</span>`,
+                    `<br><br><span class="text-center w-full block text-2xl font-bold text-yellow-500 title-font">Bersambung...</span>`
+                ],
+                choices: []
+            }
+        };
+
+            
+        // --- GAME ENGINE ---
+        function renderScene(sceneKey) {
+            const scene = storyScenes[sceneKey];
+            if (!scene) return;
+
+            state.currentScene = sceneKey;
+            updateUI();
+
+            // Clear choices
+            choicesArea.innerHTML = '';
+            
+            // Add spacing between previous content and new content if not first scene
+            if (storyArea.innerHTML !== '') {
+                storyArea.innerHTML += `<div class="h-8 border-b border-slate-700/50 mb-8"></div>`;
+            }
+
+            // Render Text Paragraphs with delay
+            let delay = 0;
+            scene.text.forEach((paragraph, index) => {
+                setTimeout(() => {
+                    const p = document.createElement('p');
+                    p.innerHTML = paragraph;
+                    p.className = "fade-in";
+                    storyArea.appendChild(p);
+                    scrollToBottom();
+                }, delay);
+                delay += 800; // 800ms delay between paragraphs for reading flow
+            });
+
+            // Render Choices after all text is shown
+            setTimeout(() => {
+                if (scene.choices.length === 0) return; // End of game
+
+                scene.choices.forEach(choice => {
+                    const btn = document.createElement('button');
+                    btn.className = "btn-choice w-full text-left bg-slate-700 hover:bg-slate-600 text-slate-200 py-3 px-6 rounded-lg border border-slate-600 shadow-md font-medium text-sm sm:text-base";
+                    btn.innerHTML = `<span class="relative z-10">${choice.text}</span>`;
+                    
+                    btn.onclick = () => {
+                        // Execute action if exists (e.g., updating stats)
+                        if (choice.action) {
+                            choice.action();
+                        }
+                        // Disable all buttons in this block after click
+                        const allBtns = choicesArea.querySelectorAll('button');
+                        allBtns.forEach(b => {
+                            b.disabled = true;
+                            b.classList.add('opacity-50', 'cursor-not-allowed');
+                        });
+                        
+                        // Append the chosen action text to the story area as a record
+                        const choiceRecord = document.createElement('div');
+                        choiceRecord.innerHTML = `<p class="text-right text-slate-400 text-sm mt-4 italic">> ${choice.text}</p>`;
+                        storyArea.appendChild(choiceRecord);
+
+                        // Move to next scene
+                        setTimeout(() => {
+                            renderScene(choice.nextScene);
+                        }, 500);
+                    };
+                    choicesArea.appendChild(btn);
+                });
+                scrollToBottom();
+            }, delay + 200); // Show choices slightly after last text
+        }
+
+        // Start Game
+        window.onload = () => {
+            renderScene('start');
+        };
+
+    </script>
+</body>
+</html>
